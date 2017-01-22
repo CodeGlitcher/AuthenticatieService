@@ -21,7 +21,7 @@ namespace Minor.Candeliver.BackOfficeAuthenticatie.Controllers
 
         [HttpGet]
         [Route("Private")]
-        [Authorize(Roles = "Admin")]
+        [Authorize]
         public IActionResult Private()
         {
             return Json("Hello me");

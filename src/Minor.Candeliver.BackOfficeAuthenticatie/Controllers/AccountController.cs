@@ -20,6 +20,7 @@ using Microsoft.AspNetCore.Http;
 using System.Security.Principal;
 using Microsoft.Extensions.Options;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using Minor.Candeliver.BackOfficeAuthenticatie.Services;
 
 namespace Minor.Candeliver.BackOfficeAuthenticatie.Controllers
 {
@@ -30,18 +31,19 @@ namespace Minor.Candeliver.BackOfficeAuthenticatie.Controllers
         private readonly SignInManager<ApplicationUser> _signInManager;
         private readonly ILogger _logger;
         private readonly TokenProviderOptions _options;
-
+        private readonly IAccountService _accountService;
 
         public AccountController(
             UserManager<ApplicationUser> userManager,
             SignInManager<ApplicationUser> signInManager,
             ILoggerFactory loggerFactory,
-            IOptions<TokenProviderOptions> options)
+            IOptions<TokenProviderOptions> options, IAccountService accountService)
         {
             _userManager = userManager;
             _signInManager = signInManager;
             _logger = loggerFactory.CreateLogger<AccountController>();
             _options = options.Value;
+            _accountService = accountService;
         }
 
 
@@ -49,6 +51,7 @@ namespace Minor.Candeliver.BackOfficeAuthenticatie.Controllers
         [HttpPost]
         [Route("Login")]
         [SwaggerOperation("BackOfficeLogin")]
+        [AllowAnonymous]
         [ProducesResponseType(typeof(LoginResult), (int)HttpStatusCode.OK)]
         [ProducesResponseType(typeof(string), (int)HttpStatusCode.BadRequest)]
         public async Task<IActionResult> Login([FromBody]LoginViewModel model)
@@ -57,61 +60,28 @@ namespace Minor.Candeliver.BackOfficeAuthenticatie.Controllers
             {
                 return BadRequest("Bad credentials");
             }
-            var username = model.UserName;
-            var password = model.Password;
-            var identity = await GetIdentity(username, password);
-
+            var identity = await _accountService.GetIdentityAsync(model.UserName, model.Password);
             if (identity == null)
             {
                 return BadRequest("Invalid username or password.");
             }
 
-            var now = DateTime.UtcNow;
-            // Specifically add the jti (random nonce), iat (issued timestamp), and sub  (subject / user) claims.
-            // You can add other claims here, if you want:
-            var claims = new List<Claim>()
-            {
-                    new Claim(JwtRegisteredClaimNames.Sub, username),                    
-                    new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-                    new Claim(JwtRegisteredClaimNames.Iat, now.Ticks.ToString(),                   
-                    ClaimValueTypes.Integer64),
-                    
-            };
-            claims.AddRange(User.Claims);
-            
-
-            // Create the JWT and write it to a string
-            var jwt = new JwtSecurityToken(
-            issuer: _options.Issuer,
-            audience: _options.Audience,
-            claims: claims,
-            notBefore: now,
-            expires: now.Add(_options.Expiration),
-            signingCredentials: _options.SigningCredentials);
-
-            var encodedJwt = new JwtSecurityTokenHandler().WriteToken(jwt);
+            var user = await _accountService.GetUserAsync(User);
             var response = new LoginResult()
             {
-                Access_Token = encodedJwt,
+                Access_Token = _accountService.CreateJwtTokenForUser(user),
                 Expires_In = (int)_options.Expiration.TotalSeconds
 
             };
-
             return Json(response);
 
 
-            
-
-       
         }
-
-
-
-        //
         // POST: /Account/Register
         [HttpPost]
         [Route("Register")]
         [SwaggerOperation("BackOfficeRegister")]
+        [AllowAnonymous]
         [ProducesResponseType(typeof(string), (int)HttpStatusCode.OK)]
         [ProducesResponseType(typeof(ModelStateDictionary), (int)HttpStatusCode.BadRequest)]
         public async Task<IActionResult> Register([FromBody]RegisterViewModel model)
@@ -119,7 +89,7 @@ namespace Minor.Candeliver.BackOfficeAuthenticatie.Controllers
             if (ModelState.IsValid)
             {
                 var user = new ApplicationUser { UserName = model.UserName, Email = model.Email };
-               
+
 
                 user.Claims.Add(new IdentityUserClaim<string>
                 {
@@ -127,12 +97,12 @@ namespace Minor.Candeliver.BackOfficeAuthenticatie.Controllers
                     ClaimValue = "Admin"
                 });
                 var result = await _userManager.CreateAsync(user, model.Password);
-                
+
                 if (result.Succeeded)
                 {
                     await _signInManager.SignInAsync(user, isPersistent: false);
                     var x = await _userManager.AddClaimAsync(user, new Claim("Role", "Admin"));
-                    
+
                     _logger.LogInformation(3, "User created a new account with password.");
                     return Json("User created a new account with password.");
                 }
@@ -173,31 +143,7 @@ namespace Minor.Candeliver.BackOfficeAuthenticatie.Controllers
             return _userManager.GetUserAsync(HttpContext.User);
         }
 
-        private async Task<ClaimsIdentity> GetIdentity(string username, string password)
-        {
 
-
-            // This doesn't count login failures towards account lockout
-            // To enable password failures to trigger account lockout, set lockoutOnFailure: true
-            var result = await _signInManager.PasswordSignInAsync(username, password, false, lockoutOnFailure: false);       
-            if (result.Succeeded)
-            {
-                _logger.LogInformation(1, "User logged in.");
-                return new ClaimsIdentity(new GenericIdentity(username, "Token"), new Claim[] { });
-            }
-            if (result.IsLockedOut)
-            {
-                _logger.LogWarning(2, "User account locked out.");
-                return null;
-            }
-            else
-            {
-                ModelState.AddModelError(string.Empty, "Invalid login attempt.");
-                return null;
-            }         
-                      
-
-        }
 
         #endregion
     }

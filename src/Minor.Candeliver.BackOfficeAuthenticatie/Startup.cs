@@ -16,6 +16,8 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using Minor.Candeliver.BackOfficeAuthenticatie.Security;
 using Newtonsoft.Json.Serialization;
+using Minor.Candeliver.BackOfficeAuthenticatie.Services;
+using Minor.Candeliver.BackOfficeAuthenticatie.Swagger;
 
 namespace Minor.Candeliver.BackOfficeAuthenticatie
 {
@@ -61,10 +63,9 @@ namespace Minor.Candeliver.BackOfficeAuthenticatie
             services.AddMvc();
             services.AddAuthorization();
 
+            services.AddScoped<IAccountService, AccountService>();
 
-
-
-
+            
 
             services.AddSwaggerGen();
             services.ConfigureSwaggerGen(options =>
@@ -76,6 +77,9 @@ namespace Minor.Candeliver.BackOfficeAuthenticatie
                     Description = "Backoffice authenicatation service",
                     TermsOfService = "None"
                 });
+
+                options.OperationFilter<SwaggerAuthorization>();
+                
             });
 
 
