@@ -1,0 +1,41 @@
+version: '2'
+
+services:
+  can.candeliver.backofficeauthenticatie:
+    image: candilever/can.backoffice.authenticatie
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      dbconnectionstring: Server=can_backoffice_authenticatie_mssql;Database=CAN_BackofficeUsers;User Id=sa;Password=P@55w0rd;
+    ports:
+      - 11100:80
+    networks:
+      can_backoffice_authenticatie_network:
+      can_main_network:
+        aliases:
+          - can-backofficeauthenticatie
+    volumes:
+      - "C:/Docker/.BackofficeAuthenticateData/Log:/var/log/Kantilever/BackofficeAuthenticateLogging/"
+    depends_on:
+      - can.backoffice.authenticatie.mssql
+
+  can.backoffice.authenticatie.mssql:
+    image: microsoft/mssql-server-linux
+    container_name: can_backoffice_authenticatie_mssql
+    environment:
+      ACCEPT_EULA: Y
+      SA_PASSWORD: P@55w0rd
+    networks:
+      - can_backoffice_authenticatie_network
+    ports:
+      - 11110:1433
+    volumes:
+      - "C:/Docker/.BackofficeAuthenticateData/db:/var/opt/mssql/"
+
+
+networks:
+  can_main_network: 
+    external:
+      name: can_main_network
+  can_backoffice_authenticatie_network:
